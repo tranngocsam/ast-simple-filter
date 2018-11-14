@@ -1,4 +1,52 @@
-defmodule AstSimpleFilter do  
+defmodule AstSimpleFilter do
+  defmodule DefineCommonTypesAndScalars do
+    use Absinthe.Schema.Notation
+
+    defmacro __using__(_) do
+      apply(__MODULE__, :define_output, [])
+    end
+
+    def define_output do
+      quote do
+        scalar :datetime_asf, name: "DateTimeAsf" do
+          serialize fn(value)->
+            if is_tuple(value) do
+              {{year, month, date}, {hour, minute, second, after_second}} = value
+              "#{year}-#{month}-#{date} #{hour}:#{minute}:#{second}.#{after_second}"
+            else
+              DateTime.to_iso8601(value)
+            end
+          end
+
+          parse fn(value)->
+            Timex.parse(value, "%Y-%m-%d %H:%M:%S.%6N", :strftime)
+          end
+        end
+
+        scalar :date_asf, name: "DateAsf" do
+          serialize fn(value)->
+            if is_tuple(value) do
+              {year, month, date} = value
+              "#{year}-#{month}-#{date}"
+            else
+              DateTime.to_iso8601(value)
+            end
+          end
+
+          parse fn(value)->
+            Timex.parse(value, "%Y-%m-%d", :strftime).to_date
+          end
+        end
+
+        object :ast_page_info do
+          field :total, :integer
+          field :page_number, :integer
+          field :per_page, :integer
+        end
+      end
+    end
+  end
+
   defmodule DefineTypes do
     use Absinthe.Schema.Notation
     
@@ -53,44 +101,8 @@ defmodule AstSimpleFilter do
       end)
       
       quote do
-        scalar :datetime_asf, name: "DateTimeAsf" do
-          serialize fn(value)->
-            if is_tuple(value) do
-              {{year, month, date}, {hour, minute, second, after_second}} = value
-              "#{year}-#{month}-#{date} #{hour}:#{minute}:#{second}.#{after_second}"
-            else
-              DateTime.to_iso8601(value)
-            end
-          end
-
-          parse fn(value)->
-            Timex.parse(value, "%Y-%m-%d %H:%M:%S.%6N", :strftime)
-          end
-        end
-
-        scalar :date_asf, name: "DateAsf" do
-          serialize fn(value)->
-            if is_tuple(value) do
-              {year, month, date} = value
-              "#{year}-#{month}-#{date}"
-            else
-              DateTime.to_iso8601(value)
-            end
-          end
-
-          parse fn(value)->
-            Timex.parse(value, "%Y-%m-%d", :strftime).to_date
-          end
-        end
-
         object unquote(model_custom_fields) do
           unquote(asts)
-        end
-
-        object :ast_page_info do
-          field :total, :integer
-          field :page_number, :integer
-          field :per_page, :integer
         end
 
         object unquote(model_results) do
