@@ -1,5 +1,5 @@
 defmodule AstSimpleFilter do
-  defmodule DefineCommonTypesAndScalars do
+  defmodule DefineCommonObjects do
     use Absinthe.Schema.Notation
 
     defmacro __using__(_) do
@@ -38,9 +38,14 @@ defmodule AstSimpleFilter do
           end
         end
 
-        object :ast_page_info do
+        object :asf_page_info do
           field :total, :integer
           field :page_number, :integer
+          field :per_page, :integer
+        end
+
+        input_object :asf_pagination_input do
+          field :page, :integer
           field :per_page, :integer
         end
       end
@@ -79,7 +84,7 @@ defmodule AstSimpleFilter do
       model_custom_fields = String.to_atom("#{base_name}_custom_fields")
       custom_datetime_type = opts[:custom_datetime_type] || :datetime_asf
       custom_date_type = opts[:custom_date_type] || :date_asf
-      custom_meta_type = opts[:custom_meta_type] || :ast_page_info
+      custom_meta_type = opts[:custom_meta_type] || :asf_page_info
 
       asts = Enum.map(field_types, fn(field_type)-> 
         f_name = field_type[:field]
