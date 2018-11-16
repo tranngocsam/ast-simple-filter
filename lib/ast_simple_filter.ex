@@ -1,5 +1,69 @@
 defmodule AstSimpleFilter do
+  @moduledoc """
+    Provide `eq`, `neq`, `lt`, `lte`, `gt`, `gte`, `nil`, `in`, `nin` for fields of any model.
+
+    Define `:<model>_custom_fields` type, which returns all fields of the `<model>`
+
+    Define `:<model>_filter_input` input, which allows to add `<column_name>_(eq|in|nin|...)`
+
+    Define `asf_filter` function, which allows to filter `<Model>` by the `<model>_filter_input`
+
+  ## Examples
+
+    `use AstSimpleFilter.DefineTypes, base_name: :user, field_types: [{id: :id}, {age: :integer}, {email: :string}]`
+
+    Will define
+
+    ```
+      object :user_custom_fields do
+        field :id, :id,
+        field :age, :integer
+        field :email, :string
+      end
+
+      object :user_results do
+        field :data, list_of(:user_custom_fields)
+        field :meta, :asf_pagination_info
+      end
+    ```
+
+    `use AstSimpleFilter.DefineFilterInput, base_name: :user, field_types: [{id: :id}, {age: :integer}, {email: :string}]`
+
+    Will define: 
+
+    ```
+      input_object :user_filter_input do
+        field age_eq, :integer
+        field age_neq, :integer
+        field age_lt, :integer
+        field age_lte, :integer
+        field age_gt, :integer
+        field age_gte, :integer
+        field age_in, list_of(:integer)
+        field age_nin, list_of(:integer)
+        field age_nil, :boolean
+      end
+    ```
+  """
   defmodule DefineCommonObjects do
+    @moduledoc """
+      Define default scalars, inputs, objects that are used in the DefineTypes module.
+
+      Define `:asf_datetime` scalar to use for datetime fields.
+
+      Define `:asf_date` scalar to use for date fields.
+
+      Define `:asf_pagination_info` object, which contains `total` entries, `page_number` and `per_page`.
+
+      Define `:ast_pagination_input` input, which allows to specify `page_number` and `per_page`.
+
+    ## Usage: 
+    
+      in `data_types.ex` add
+
+      `use AstSimpleFilter.DefineCommonObjects`
+    """
+
     use Absinthe.Schema.Notation
 
     defmacro __using__(_) do
@@ -8,7 +72,7 @@ defmodule AstSimpleFilter do
 
     def define_output do
       quote do
-        scalar :datetime_asf, name: "DateTimeAsf" do
+        scalar :asf_datetime, name: "DateTimeAsf" do
           serialize fn(value)->
             if is_tuple(value) do
               {{year, month, date}, {hour, minute, second, after_second}} = value
@@ -23,7 +87,7 @@ defmodule AstSimpleFilter do
           end
         end
 
-        scalar :date_asf, name: "DateAsf" do
+        scalar :asf_date, name: "DateAsf" do
           serialize fn(value)->
             if is_tuple(value) do
               {year, month, date} = value
@@ -38,7 +102,7 @@ defmodule AstSimpleFilter do
           end
         end
 
-        object :asf_page_info do
+        object :asf_pagination_info do
           field :total, :integer
           field :page_number, :integer
           field :per_page, :integer
@@ -53,6 +117,37 @@ defmodule AstSimpleFilter do
   end
 
   defmodule DefineTypes do
+    @moduledoc """
+      Define returned object that can be used in absinthe.
+
+      Define `:<model>_custom_fields`, which allows to customize returned fields
+
+      Define `:<model>_results`, which allows to return additional data (Default is `asf_pagination_info`)
+
+    ## Example
+      In `data_types.ex` add
+
+      `use AstSimpleFilter.DefineTypes, base_name: :user, field_types: [{id: :id}, {age: :integer}, {email: :string}]`
+
+      Will define
+
+      ```
+        object :user_custom_fields do
+          field :id, :id
+          field :page, :integer
+          field :email, :string
+        end
+
+        object :user_results do
+          field :data, list_of(:user_custom_fields)
+          field :meta, :asf_pagination_info
+        end
+      ```
+
+      We can omit `field_types` and use `kclass` instead, ie `use AstSimpleFilter.DefineTypes, base_name: :user, kclass: Demo.Accounts.User`, in this case it will use all fields (Exclude virtual fields) of Demo.Accounts.User.
+      Other optional parameters are `custom_datetime_type`, `custom_date_type`, `custom_meta_type`. We need to define common objects (`DefineCommonObjects`) if these optional parameter are omited. 
+    """
+
     use Absinthe.Schema.Notation
     
     defmacro __using__(opts) do
@@ -82,9 +177,9 @@ defmodule AstSimpleFilter do
       field_types = opts[:field_types]
       model_results = String.to_atom("#{base_name}_results")
       model_custom_fields = String.to_atom("#{base_name}_custom_fields")
-      custom_datetime_type = opts[:custom_datetime_type] || :datetime_asf
-      custom_date_type = opts[:custom_date_type] || :date_asf
-      custom_meta_type = opts[:custom_meta_type] || :asf_page_info
+      custom_datetime_type = opts[:custom_datetime_type] || :asf_datetime
+      custom_date_type = opts[:custom_date_type] || :asf_date
+      custom_meta_type = opts[:custom_meta_type] || :asf_pagination_info
 
       asts = Enum.map(field_types, fn(field_type)-> 
         f_name = field_type[:field]
@@ -119,6 +214,52 @@ defmodule AstSimpleFilter do
   end
 
   defmodule DefineFilterInput do
+    @moduledoc """
+      Define `:<model>_filter_input`, which has `id_eq`, `id_neq`,...
+
+    ## Example 
+      In `data_types.ex` add
+
+      `use AstSimpleFilter.DefineFilterInput, base_name: :user, field_types: [{id: :id}, {age: :integer}, {email: :string}]`
+
+      Will define
+
+      ```
+        input_object :user_filter_input do
+          field :id_eq, :id
+          field :id_neq, :id
+          field :id_in, list_of(:id)
+          field :id_nin, list_of(:id)
+          field :id_nil, :boolean
+          field :id_lt, :id
+          field :id_lte, :id
+          field :id_gt, :id
+          field :id_gte, :id
+
+          field :age_eq, :integer
+          field :age_neq, :integer
+          field :age_in, list_of(:integer)
+          field :age_nin, list_of(:integer)
+          field :age_nil, :boolean
+          field :age_lt, :integer
+          field :age_lte, :integer
+          field :age_gt, :integer
+          field :age_gte, :integer
+
+          field :email_eq, :string
+          field :email_neq, :string
+          field :email_in, list_of(:string)
+          field :email_nin, list_of(:string)
+          field :email_nil, :boolean
+          field :email_lt, :string
+          field :email_lte, :string
+          field :email_gt, :string
+          field :email_gte, :string
+        end
+      ```
+
+      Similarly, we can omit `field_types` and use `kclass` instead, ie `use AstSimpleFilter.DefineFilterInput, base_name: :user, kclass: Demo.Accounts.User`, in this case it will define filters for all fields (Exclude virtual fields) of Demo.Accounts.User
+    """
     use Absinthe.Schema.Notation
     
     defmacro __using__(opts) do
@@ -193,6 +334,20 @@ defmodule AstSimpleFilter do
   end
 
   defmodule DefineFilterFunctions do
+    @moduledoc """
+      Define `asf_filter` function that can be used to filter `<Model>` by `<model>_filter_input`.
+
+    ## Example: 
+      In `User` model add
+    
+      `use AstSimpleFilter.DefineFilterFunctions, Demo.Accounts.User`
+
+      Then we can use
+
+      ```
+        User.asf_filter(%{idEq: 1})
+      ```
+    """
     defmacro __using__(model) do
       apply(__MODULE__, :define_filter_fns, [model])
     end
@@ -201,11 +356,11 @@ defmodule AstSimpleFilter do
       module = Macro.expand(model, __ENV__)
 
       quote do
-        def filter(query, nil, _) do
+        def asf_filter(query, nil, _) do
           query
         end
 
-        def filter(query, fieldname_param, value) do
+        def asf_filter(query, fieldname_param, value) do
           matches = extract_fieldname_and_operator(fieldname_param)
 
           if length(matches) != 2 do
@@ -259,11 +414,11 @@ defmodule AstSimpleFilter do
           query |> where(^dynamic_query)
         end
 
-        def filter(query, %{} = params) do
-          Enum.reduce(params, query, fn({k, v}, modified_query)-> filter(modified_query, k, v) end)
+        def asf_filter(query, %{} = params) do
+          Enum.reduce(params, query, fn({k, v}, modified_query)-> asf_filter(modified_query, k, v) end)
         end
 
-        def filter(query, _) do
+        def asf_filter(query, _) do
           query
         end
 
