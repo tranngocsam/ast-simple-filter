@@ -10,7 +10,7 @@ defmodule AstSimpleFilter do
 
   ## Examples
 
-    `use AstSimpleFilter.DefineTypes, base_name: :user, field_types: [{id: :id}, {age: :integer}, {email: :string}]`
+    `use AstSimpleFilter.DefineTypes, base_name: :user, field_types: [%{field: id, type: :id}, %{field: age, type: :integer}, %{field: email, type: :string}]`
 
     Will define
 
@@ -27,7 +27,7 @@ defmodule AstSimpleFilter do
       end
     ```
 
-    `use AstSimpleFilter.DefineFilterInput, base_name: :user, field_types: [{id: :id}, {age: :integer}, {email: :string}]`
+    `use AstSimpleFilter.DefineFilterInput, base_name: :user, field_types: [%{field: id, type: :id}, %{field: age, type: :integer}, %{field: email, type: :string}]`
 
     Will define: 
 
@@ -93,7 +93,7 @@ defmodule AstSimpleFilter do
     ## Example
       In `data_types.ex` add
 
-      `use AstSimpleFilter.DefineTypes, base_name: :user, field_types: [{id: :id}, {age: :integer}, {email: :string}]`
+      `use AstSimpleFilter.DefineTypes, base_name: :user, field_types: [%{field: id, type: :id}, %{field: age, type: :integer}, %{field: email, type: :string}]`
 
       Will define
 
@@ -132,7 +132,8 @@ defmodule AstSimpleFilter do
         base_name: opts[:base_name],
         field_types: field_types,
         custom_datetime_type: opts[:custom_datetime_type],
-        custom_date_type: opts[:custom_date_type]
+        custom_date_type: opts[:custom_date_type],
+        custom_meta_type: opts[:custom_meta_type]
       }
 
       apply(__MODULE__, :define_output, [args])
@@ -186,7 +187,7 @@ defmodule AstSimpleFilter do
     ## Example 
       In `data_types.ex` add
 
-      `use AstSimpleFilter.DefineFilterInput, base_name: :user, field_types: [{id: :id}, {age: :integer}, {email: :string}]`
+      `use AstSimpleFilter.DefineFilterInput, base_name: :user, field_types: [%{field: id, type: :id}, %{field: age, type: :integer}, %{field: email, type: :string}]`
 
       Will define
 
