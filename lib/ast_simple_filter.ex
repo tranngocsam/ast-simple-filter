@@ -49,10 +49,6 @@ defmodule AstSimpleFilter do
     @moduledoc """
       Define default scalars, inputs, objects that are used in the DefineTypes module.
 
-      Define `:asf_datetime` scalar to use for datetime fields.
-
-      Define `:asf_date` scalar to use for date fields.
-
       Define `:asf_pagination_info` object, which contains `total` entries, `page_number` and `per_page`.
 
       Define `:ast_pagination_input` input, which allows to specify `page_number` and `per_page`.
@@ -72,36 +68,6 @@ defmodule AstSimpleFilter do
 
     def define_output do
       quote do
-        scalar :asf_datetime, name: "DateTimeAsf" do
-          serialize fn(value)->
-            if is_tuple(value) do
-              {{year, month, date}, {hour, minute, second, after_second}} = value
-              "#{year}-#{month}-#{date} #{hour}:#{minute}:#{second}.#{after_second}"
-            else
-              DateTime.to_iso8601(value)
-            end
-          end
-
-          parse fn(value)->
-            Timex.parse(value, "%Y-%m-%d %H:%M:%S.%6N", :strftime)
-          end
-        end
-
-        scalar :asf_date, name: "DateAsf" do
-          serialize fn(value)->
-            if is_tuple(value) do
-              {year, month, date} = value
-              "#{year}-#{month}-#{date}"
-            else
-              DateTime.to_iso8601(value)
-            end
-          end
-
-          parse fn(value)->
-            Timex.parse(value, "%Y-%m-%d", :strftime).to_date
-          end
-        end
-
         object :asf_pagination_info do
           field :total, :integer
           field :page_number, :integer
@@ -177,8 +143,8 @@ defmodule AstSimpleFilter do
       field_types = opts[:field_types]
       model_results = String.to_atom("#{base_name}_results")
       model_custom_fields = String.to_atom("#{base_name}_custom_fields")
-      custom_datetime_type = opts[:custom_datetime_type] || :asf_datetime
-      custom_date_type = opts[:custom_date_type] || :asf_date
+      custom_datetime_type = opts[:custom_datetime_type] || :naive_datetime
+      custom_date_type = opts[:custom_date_type] || :date
       custom_meta_type = opts[:custom_meta_type] || :asf_pagination_info
 
       asts = Enum.map(field_types, fn(field_type)-> 
