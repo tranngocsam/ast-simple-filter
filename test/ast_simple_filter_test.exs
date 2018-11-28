@@ -93,8 +93,8 @@ defmodule AstSimpleFilterTest do
     defmodule TestUser do
       use Ecto.Schema
       import Ecto.Query
-      
-      use AstSimpleFilter.DefineFilterFunctions, TestUser
+
+      use AstSimpleFilter.DefineFilterFunctions, AstSimpleFilterTest.TestUser
 
       schema "test_users" do
         field :age, :integer
@@ -104,6 +104,6 @@ defmodule AstSimpleFilterTest do
       end
     end
 
-    assert :erlang.function_exported(TestUser, :asf_filter, 2) 
+    assert :erlang.function_exported(TestUser, :asf_filter, 2)
   end
 end
