@@ -6,7 +6,7 @@ defmodule AstSimpleFilter do
 
     Define `:<model>_filter_input` input, which allows to add `<column_name>_(eq|in|nin|...)`
 
-    Define `asf_filter` function, which allows to filter `<Model>` by the `<model>_filter_input`
+    Define `asf_filter/2` functions, which allows to filter `<Model>` by the `<model>_filter_input`
 
   ## Examples
 
@@ -47,7 +47,7 @@ defmodule AstSimpleFilter do
   """
   defmodule DefineCommonObjects do
     @moduledoc """
-      Define default scalars, inputs, objects that are used in the DefineTypes module.
+      Define default input, object that are used in the DefineTypes module.
 
       Define `:asf_pagination_info` object, which contains `total` entries, `page_number` and `per_page`.
 
@@ -84,7 +84,7 @@ defmodule AstSimpleFilter do
 
   defmodule DefineTypes do
     @moduledoc """
-      Define returned object that can be used in absinthe.
+      Define returned objects that can be used in absinthe.
 
       Define `:<model>_custom_fields`, which allows to customize returned fields
 
@@ -182,7 +182,7 @@ defmodule AstSimpleFilter do
 
   defmodule DefineFilterInput do
     @moduledoc """
-      Define `:<model>_filter_input`, which has `id_eq`, `id_neq`,...
+      Define `:<model>_filter_input`, which has `id_eq, id_neq,...`
 
     ## Example 
       In `data_types.ex` add
@@ -302,7 +302,7 @@ defmodule AstSimpleFilter do
 
   defmodule DefineFilterFunctions do
     @moduledoc """
-      Define `asf_filter` function that can be used to filter `<Model>` by `<model>_filter_input`.
+      Define `asf_filter/2`, `asf_filter/3` functions that can be used to filter `<Model>` by `<model>_filter_input`.
 
     ## Example: 
       In `User` model add
@@ -312,7 +312,8 @@ defmodule AstSimpleFilter do
       Then we can use
 
       ```
-        User.asf_filter(%{idEq: 1})
+        query = from u in "users", select: map(u, [:id, :age, :email])
+        User.asf_filter(query, %{idEq: 1})
       ```
     """
     defmacro __using__(model) do
