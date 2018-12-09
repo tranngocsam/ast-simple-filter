@@ -99,6 +99,25 @@ defmodule AstSimpleFilter do
             end
           end
         end
+
+        scalar :asf_json, name: "AsfJson" do
+          serialize fn(value)->
+            value
+          end
+
+          parse fn(value_param)->
+            if value_param.__struct__ == Absinthe.Blueprint.Input.String do
+              value = value_param.value
+
+              case Jason.decode(value) do
+                {:ok, result} -> {:ok, result}
+                _ -> :error
+              end
+            else
+              value_param
+            end
+          end
+        end
       end
     end
   end
@@ -185,7 +204,7 @@ defmodule AstSimpleFilter do
               :asf_uuid
             else
               if f_type == :map do
-                :json
+                :asf_json
               else
                 f_type
               end
