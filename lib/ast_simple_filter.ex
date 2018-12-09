@@ -89,8 +89,14 @@ defmodule AstSimpleFilter do
             end
           end
 
-          parse fn(value)->
-            value
+          parse fn(value_param)->
+            if value_param.__struct__ == Absinthe.Blueprint.Input.String do
+              value = value_param.value
+
+              Ecto.UUID.dump(value)
+            else
+              value_param
+            end
           end
         end
       end
