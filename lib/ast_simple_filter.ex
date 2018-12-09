@@ -78,6 +78,21 @@ defmodule AstSimpleFilter do
           field :page, :integer
           field :per_page, :integer
         end
+
+        scalar :asf_uuid, name: "AsfUUID" do
+          serialize fn(value)->
+            if is_bitstring(value) do
+              {:ok, uuid} = Ecto.UUID.cast(value)
+              uuid
+            else
+              value
+            end
+          end
+
+          parse fn(value)->
+            value
+          end
+        end
       end
     end
   end
@@ -131,6 +146,7 @@ defmodule AstSimpleFilter do
       args = %{
         base_name: opts[:base_name],
         field_types: field_types,
+        model_object: opts[:model_object],
         custom_datetime_type: opts[:custom_datetime_type],
         custom_date_type: opts[:custom_date_type],
         custom_meta_type: opts[:custom_meta_type]
@@ -144,6 +160,7 @@ defmodule AstSimpleFilter do
       field_types = opts[:field_types]
       model_results = String.to_atom("#{base_name}_results")
       model_custom_fields = String.to_atom("#{base_name}_custom_fields")
+      model_object = opts[:model_object] || model_custom_fields
       custom_datetime_type = opts[:custom_datetime_type] || :naive_datetime
       custom_date_type = opts[:custom_date_type] || :date
       custom_meta_type = opts[:custom_meta_type] || :asf_pagination_info
@@ -158,7 +175,15 @@ defmodule AstSimpleFilter do
           if f_type == :date do
             custom_date_type
           else
-            f_type
+            if f_type == :binary_id || f_type == :uuid do
+              :asf_uuid
+            else
+              if f_type == :map do
+                :json
+              else
+                f_type
+              end
+            end
           end
         end
 
@@ -173,7 +198,7 @@ defmodule AstSimpleFilter do
         end
 
         object unquote(model_results) do
-          field :data, list_of(unquote(model_custom_fields))
+          field :data, list_of(unquote(model_object))
           field :meta, unquote(custom_meta_type)
         end
       end
@@ -242,6 +267,10 @@ defmodule AstSimpleFilter do
         field_types
       end
 
+      field_types = Enum.reject(field_types, fn(f)->
+        f[:type] == :map
+      end)
+
       args = %{
         base_name: base_name,
         field_types: field_types
@@ -262,7 +291,11 @@ defmodule AstSimpleFilter do
         f_type = if f_type == :naive_datetime do
           :string
         else
-          f_type
+          if f_type == :binary_id do
+            :asf_uuid
+          else
+            f_type
+          end
         end
 
         suffixes = if f_type == :boolean do
