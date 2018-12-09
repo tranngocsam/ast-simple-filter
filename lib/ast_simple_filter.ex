@@ -355,12 +355,23 @@ defmodule AstSimpleFilter do
         User.asf_filter(query, %{idEq: 1})
       ```
     """
-    defmacro __using__(model) do
-      apply(__MODULE__, :define_filter_fns, [model])
+    defmacro __using__(opts) do
+      field_types = if opts[:field_types] do
+        {field_types, _} = Module.eval_quoted(__CALLER__, opts[:field_types])
+        field_types
+      end
+
+      args = %{
+        klass: opts[:klass],
+        field_types: field_types
+      }
+
+      apply(__MODULE__, :define_filter_fns, [args])
     end
 
-    def define_filter_fns(model) do
-      module = Macro.expand(model, __ENV__)
+    def define_filter_fns(opts) do
+      module = Macro.expand(opts[:klass], __ENV__)
+      field_types = opts[:field_types]
 
       quote do
         def asf_filter(query, nil, _) do
@@ -376,7 +387,18 @@ defmodule AstSimpleFilter do
 
           fieldname = String.to_atom(Enum.at(matches, 0))
           operator = Enum.at(matches, 1)
-          type = unquote(module).__schema__(:type, fieldname)
+
+          fields_arr = unquote(Macro.escape(field_types))
+
+          type = if fields_arr && length(fields_arr) > 0 do
+            field = Enum.find(fields_arr, fn(el)->
+              el[:field] == fieldname
+            end)
+
+            field[:type]
+          else
+            unquote(module).__schema__(:type, fieldname)
+          end
 
           if is_nil(type) do
             raise ArgumentError, message: "invalid field name #{fieldname}"
