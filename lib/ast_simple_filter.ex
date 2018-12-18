@@ -29,7 +29,7 @@ defmodule AstSimpleFilter do
 
     `use AstSimpleFilter.DefineFilterInput, base_name: :user, field_types: [%{field: id, type: :id}, %{field: age, type: :integer}, %{field: email, type: :string}]`
 
-    Will define: 
+    Will define:
 
     ```
       input_object :user_filter_input do
@@ -53,8 +53,8 @@ defmodule AstSimpleFilter do
 
       Define `:ast_pagination_input` input, which allows to specify `page_number` and `per_page`.
 
-    ## Usage: 
-    
+    ## Usage:
+
       in `data_types.ex` add
 
       `use AstSimpleFilter.DefineCommonObjects`
@@ -151,11 +151,11 @@ defmodule AstSimpleFilter do
       ```
 
       We can omit `field_types` and use `kclass` instead, ie `use AstSimpleFilter.DefineTypes, base_name: :user, kclass: Demo.Accounts.User`, in this case it will use all fields (Exclude virtual fields) of Demo.Accounts.User.
-      Other optional parameters are `custom_datetime_type`, `custom_date_type`, `custom_meta_type`. We need to define common objects (`DefineCommonObjects`) if these optional parameter are omited. 
+      Other optional parameters are `custom_datetime_type`, `custom_date_type`, `custom_meta_type`. We need to define common objects (`DefineCommonObjects`) if these optional parameter are omited.
     """
 
     use Absinthe.Schema.Notation
-    
+
     defmacro __using__(opts) do
       field_types = if !opts[:field_types] do
         kclass = Macro.expand(opts[:kclass], __ENV__)
@@ -174,7 +174,8 @@ defmodule AstSimpleFilter do
         model_object: opts[:model_object],
         custom_datetime_type: opts[:custom_datetime_type],
         custom_date_type: opts[:custom_date_type],
-        custom_meta_type: opts[:custom_meta_type]
+        custom_meta_type: opts[:custom_meta_type],
+        adapter: opts[:adapter]
       }
 
       apply(__MODULE__, :define_output, [args])
@@ -189,8 +190,9 @@ defmodule AstSimpleFilter do
       custom_datetime_type = opts[:custom_datetime_type] || :naive_datetime
       custom_date_type = opts[:custom_date_type] || :date
       custom_meta_type = opts[:custom_meta_type] || :asf_pagination_info
+      adapter = opts[:adapter]
 
-      asts = Enum.map(field_types, fn(field_type)-> 
+      asts = Enum.map(field_types, fn(field_type)->
         f_name = field_type[:field]
         f_type = field_type[:type]
 
@@ -201,7 +203,11 @@ defmodule AstSimpleFilter do
             custom_date_type
           else
             if f_type == :binary_id || f_type == :uuid do
-              :asf_uuid
+              if adapter == :mongo do
+                :string
+              else
+                :asf_uuid
+              end
             else
               if f_type == :map do
                 :asf_json
@@ -214,9 +220,9 @@ defmodule AstSimpleFilter do
 
         quote do
           field unquote(f_name), unquote(f_type)
-        end      
+        end
       end)
-      
+
       quote do
         object unquote(model_custom_fields) do
           unquote(asts)
@@ -234,7 +240,7 @@ defmodule AstSimpleFilter do
     @moduledoc """
       Define `:<model>_filter_input`, which has `id_eq, id_neq,...`
 
-    ## Example 
+    ## Example
       In `data_types.ex` add
 
       `use AstSimpleFilter.DefineFilterInput, base_name: :user, field_types: [%{field: id, type: :id}, %{field: age, type: :integer}, %{field: email, type: :string}]`
@@ -278,7 +284,7 @@ defmodule AstSimpleFilter do
       Similarly, we can omit `field_types` and use `kclass` instead, ie `use AstSimpleFilter.DefineFilterInput, base_name: :user, kclass: Demo.Accounts.User`, in this case it will define filters for all fields (Exclude virtual fields) of Demo.Accounts.User
     """
     use Absinthe.Schema.Notation
-    
+
     defmacro __using__(opts) do
       base_name = opts[:base_name]
       field_types = if !opts[:field_types] do
@@ -298,7 +304,8 @@ defmodule AstSimpleFilter do
 
       args = %{
         base_name: base_name,
-        field_types: field_types
+        field_types: field_types,
+        adapter: opts[:adapter]
       }
 
       apply(__MODULE__, :define_input, [args])
@@ -307,6 +314,7 @@ defmodule AstSimpleFilter do
     def define_input(opts) do
       base_name = opts[:base_name]
       field_types = opts[:field_types]
+      adapter = opts[:adapter]
       input_name = String.to_atom("#{base_name}_filter_input")
 
       asts = Enum.map(field_types, fn(field_type)->
@@ -317,7 +325,11 @@ defmodule AstSimpleFilter do
           :string
         else
           if f_type == :binary_id do
-            :asf_uuid
+            if adapter == :mongo do
+              :string
+            else
+              :asf_uuid
+            end
           else
             f_type
           end
@@ -326,10 +338,21 @@ defmodule AstSimpleFilter do
         suffixes = if f_type == :boolean do
           ["eq", "neq", "in", "nin", "nil"]
         else
-          ["eq", "neq", "in", "nin", "gt", "gte", "lt", "lte", "nil"]
-        end 
+          l = ["eq", "neq", "in", "nin", "gt", "gte", "lt", "lte", "nil"]
 
-        Enum.map(suffixes, fn(suffix)-> 
+          if adapter == :mongo do
+            if f_type == :string do
+              # Exists, match, match end, match full (case insensitive), match start
+              l ++ ["ex", "mt", "mte", "mtf", "mts"]
+            else
+              l ++ ["ex"]
+            end
+          else
+            l
+          end
+        end
+
+        Enum.map(suffixes, fn(suffix)->
           full_field_name = String.to_atom("#{f_name}_#{suffix}")
 
           f_type = if suffix == "nil" do
@@ -362,9 +385,9 @@ defmodule AstSimpleFilter do
     @moduledoc """
       Define `asf_filter/2`, `asf_filter/3` functions that can be used to filter `<Model>` by `<model>_filter_input`.
 
-    ## Example: 
+    ## Example:
       In `User` model add
-    
+
       `use AstSimpleFilter.DefineFilterFunctions, Demo.Accounts.User`
 
       Then we can use
@@ -385,10 +408,14 @@ defmodule AstSimpleFilter do
         field_types: field_types
       }
 
-      apply(__MODULE__, :define_filter_fns, [args])
+      if opts[:adapter] == :mongo do
+        apply(__MODULE__, :define_mongo_filter_fns, [args])
+      else
+        apply(__MODULE__, :define_sql_filter_fns, [args])
+      end
     end
 
-    def define_filter_fns(opts) do
+    def define_sql_filter_fns(opts) do
       module = Macro.expand(opts[:klass], __ENV__)
       field_types = opts[:field_types]
 
@@ -486,18 +513,18 @@ defmodule AstSimpleFilter do
               if type == :boolean do
                 if value == "" do
                   nil
-                else 
+                else
                   if String.downcase(value) == "true" do
                     true
                   else
                     false
                   end
                 end
-              else 
+              else
                 if type == :id || type == :integer || type == :float do
                   if value == "" do
                     nil
-                  else 
+                  else
                     if type == :id || type == :integer do
                       String.to_integer(value)
                     else
@@ -527,6 +554,147 @@ defmodule AstSimpleFilter do
 
         def extract_fieldname_and_operator(fieldname_param) do
           Regex.scan(~r/([a-z_]+)_(eq|neq|in|nin|lt|lte|gt|gte|nil)$/i, inspect(fieldname_param))
+                      |> List.flatten
+                      |> List.delete_at(0)
+        end
+      end
+    end
+
+    def define_mongo_filter_fns(opts) do
+      module = Macro.expand(opts[:klass], __ENV__)
+      field_types = opts[:field_types]
+
+      quote do
+        @spec asf_build_condition(String.t, any) :: map
+        def asf_build_condition(fieldname_param, value) do
+          matches = extract_fieldname_and_operator(fieldname_param)
+
+          if length(matches) != 2 do
+            raise ArgumentError, message: "invalid field parameter #{fieldname_param}"
+          end
+
+          fieldname = String.to_atom(Enum.at(matches, 0))
+          operator = Enum.at(matches, 1)
+
+          fields_arr = unquote(Macro.escape(field_types))
+
+          type = if fields_arr && length(fields_arr) > 0 do
+            field = Enum.find(fields_arr, fn(el)->
+              el[:field] == fieldname
+            end)
+
+            field[:type]
+          else
+            unquote(module).__schema__(:type, fieldname)
+          end
+
+          if is_nil(type) do
+            raise ArgumentError, message: "invalid field name #{fieldname}"
+          end
+
+          type = if operator == "nil" do
+            :boolean
+          else
+            type
+          end
+
+          refined_value = refine_value_for_db_type(type, value)
+
+          case operator do
+            "eq" ->
+              %{fieldname => %{"$eq" => refined_value}}
+            "neq" ->
+              %{fieldname => %{"$ne" => refined_value}}
+            "in" ->
+              %{fieldname => %{"$in" => List.flatten([refined_value])}}
+            "nin" ->
+              %{fieldname => %{"$nin" => refined_value}}
+            "gt" ->
+              %{fieldname => %{"$gt" => refined_value}}
+            "gte" ->
+              %{fieldname => %{"$gte" => refined_value}}
+            "lt" ->
+              %{fieldname => %{"$lt" => refined_value}}
+            "lte" ->
+              %{fieldname => %{"$lte" => refined_value}}
+            "nil" ->
+              if refined_value == true do
+                %{fieldname => %{"$eq" => nil}}
+              else
+                %{fieldname => %{"$ne" => nil}}
+              end
+            "ex" ->
+              %{fieldname => %{"$exists" => (refined_value == true)}}
+            "mt" ->
+              r = %BSON.Regex{pattern: "#{Regex.escape(refined_value)}", options: "i"}
+              %{fieldname => r}
+            "mtf" ->
+              r = %BSON.Regex{pattern: "\\A#{Regex.escape(refined_value)}\\z", options: "i"}
+              %{fieldname => r}
+            "mts" ->
+              r = %BSON.Regex{pattern: "\\A#{Regex.escape(refined_value)}", options: "i"}
+              %{fieldname => r}
+            "mte" ->
+              r = %BSON.Regex{pattern: "#{Regex.escape(refined_value)}\\z", options: "i"}
+              %{fieldname => r}
+            _->
+              raise "unimplemented"
+          end
+        end
+
+        def asf_build_conditions(%{} = params) do
+          Enum.map(params, fn({k, v})-> asf_build_condition(k, v) end)
+        end
+
+        def refine_value_for_db_type(type, value) do
+          if is_list(value) do
+            Enum.map(value, fn(v)-> refine_value_for_db_type(type, v) end)
+          else
+            if is_binary(value) do
+              if type == :boolean do
+                if value == "" do
+                  nil
+                else
+                  if String.downcase(value) == "true" do
+                    true
+                  else
+                    false
+                  end
+                end
+              else
+                if type == :id || type == :integer || type == :float do
+                  if value == "" do
+                    nil
+                  else
+                    if type == :id || type == :integer do
+                      String.to_integer(value)
+                    else
+                      Float.parse(value)
+                    end
+                  end
+                else
+                  if type == :naive_datetime || type == :utc_datetime do
+                    {status, parsed_value} = Timex.parse(value, "%Y-%m-%d %H:%M:%S", :strftime)
+
+                    if status == :ok do
+                      parsed_value
+                    else
+                      {:ok, parsed_value} = Timex.parse(value, "%Y-%m-%d", :strftime)
+                      parsed_value
+                    end
+                  else
+                    value
+                  end
+                end
+              end
+            else
+              value
+            end
+          end
+        end
+
+        def extract_fieldname_and_operator(fieldname_param) do
+          Regex.scan(~r/([a-z_]+)_(eq|neq|in|nin|lt|lte|gt|gte|nil|ex|mt|mte|mtf|mts)$/i, inspect(fieldname_param))
                       |> List.flatten
                       |> List.delete_at(0)
         end
