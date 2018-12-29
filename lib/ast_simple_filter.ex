@@ -158,11 +158,13 @@ defmodule AstSimpleFilter do
 
     defmacro __using__(opts) do
       field_types = if !opts[:field_types] do
-        kclass = Macro.expand(opts[:kclass], __ENV__)
-        fields = kclass.__schema__(:fields)
-        Enum.map(fields, fn(f)->
-          %{field: f, type: kclass.__schema__(:type, f)}
-        end)
+        unless opts[:model_object] do
+          kclass = Macro.expand(opts[:kclass], __ENV__)
+          fields = kclass.__schema__(:fields)
+          Enum.map(fields, fn(f)->
+            %{field: f, type: kclass.__schema__(:type, f)}
+          end)
+        end
       else
         {field_types, _} = Module.eval_quoted(__CALLER__, opts[:field_types])
         field_types
@@ -184,53 +186,69 @@ defmodule AstSimpleFilter do
     def define_output(opts) do
       base_name = opts[:base_name]
       field_types = opts[:field_types]
-      model_results = String.to_atom("#{base_name}_results")
-      model_custom_fields = String.to_atom("#{base_name}_custom_fields")
-      model_object = opts[:model_object] || model_custom_fields
-      custom_datetime_type = opts[:custom_datetime_type] || :naive_datetime
-      custom_date_type = opts[:custom_date_type] || :date
       custom_meta_type = opts[:custom_meta_type] || :asf_pagination_info
-      adapter = opts[:adapter]
+      model_results = String.to_atom("#{base_name}_results")
 
-      asts = Enum.map(field_types, fn(field_type)->
-        f_name = field_type[:field]
-        f_type = field_type[:type]
+      if !field_types || length(field_types) == 0 do
+        model_object = opts[:model_object]
 
-        f_type = if f_type == :naive_datetime do
-          custom_datetime_type
+        if model_object do
+          quote do
+            object unquote(model_results) do
+              field :data, list_of(unquote(model_object))
+              field :meta, unquote(custom_meta_type)
+            end
+          end
         else
-          if f_type == :date do
-            custom_date_type
+          throw("undefined model_object")
+        end
+      else
+        model_custom_fields = String.to_atom("#{base_name}_custom_fields")
+        model_object = opts[:model_object] || model_custom_fields
+        custom_datetime_type = opts[:custom_datetime_type] || :naive_datetime
+        custom_date_type = opts[:custom_date_type] || :date
+        adapter = opts[:adapter]
+
+        asts = Enum.map(field_types, fn(field_type)->
+          f_name = field_type[:field]
+          f_type = field_type[:type]
+
+          f_type = if f_type == :naive_datetime do
+            custom_datetime_type
           else
-            if f_type == :binary_id || f_type == :uuid do
-              if adapter == :mongo do
-                :string
-              else
-                :asf_uuid
-              end
+            if f_type == :date do
+              custom_date_type
             else
-              if f_type == :map do
-                :asf_json
+              if f_type == :binary_id || f_type == :uuid do
+                if adapter == :mongo do
+                  :string
+                else
+                  :asf_uuid
+                end
               else
-                f_type
+                if f_type == :map do
+                  :asf_json
+                else
+                  f_type
+                end
               end
             end
           end
-        end
+
+          quote do
+            field unquote(f_name), unquote(f_type)
+          end
+        end)
 
         quote do
-          field unquote(f_name), unquote(f_type)
-        end
-      end)
+          object unquote(model_custom_fields) do
+            unquote(asts)
+          end
 
-      quote do
-        object unquote(model_custom_fields) do
-          unquote(asts)
-        end
-
-        object unquote(model_results) do
-          field :data, list_of(unquote(model_object))
-          field :meta, unquote(custom_meta_type)
+          object unquote(model_results) do
+            field :data, list_of(unquote(model_object))
+            field :meta, unquote(custom_meta_type)
+          end
         end
       end
     end
@@ -585,7 +603,19 @@ defmodule AstSimpleFilter do
 
             field[:type]
           else
+            fieldname = if fieldname == :id do
+              :_id
+            else
+              fieldname
+            end
+
             unquote(module).__schema__(:type, fieldname)
+          end
+
+          fieldname = if fieldname == :id do
+            :_id
+          else
+            fieldname
           end
 
           if is_nil(type) do
