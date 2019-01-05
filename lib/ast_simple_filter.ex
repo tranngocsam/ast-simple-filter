@@ -422,7 +422,6 @@ defmodule AstSimpleFilter do
       end
 
       args = %{
-        klass: opts[:klass],
         field_types: field_types
       }
 
@@ -434,7 +433,6 @@ defmodule AstSimpleFilter do
     end
 
     def define_sql_filter_fns(opts) do
-      module = Macro.expand(opts[:klass], __ENV__)
       field_types = opts[:field_types]
 
       quote do
@@ -461,7 +459,7 @@ defmodule AstSimpleFilter do
 
             field[:type]
           else
-            unquote(module).__schema__(:type, fieldname)
+            __MODULE__.__schema__(:type, fieldname)
           end
 
           if is_nil(type) do
@@ -579,8 +577,7 @@ defmodule AstSimpleFilter do
     end
 
     def define_mongo_filter_fns(opts) do
-      module = Macro.expand(opts[:klass], __ENV__)
-      field_types = opts[:field_types]
+      field_types = opts[:field_types] || []
 
       quote do
         @spec asf_build_condition(String.t, any) :: map
@@ -596,20 +593,14 @@ defmodule AstSimpleFilter do
 
           fields_arr = unquote(Macro.escape(field_types))
 
-          type = if fields_arr && length(fields_arr) > 0 do
+          type = if length(fields_arr) > 0 do
             field = Enum.find(fields_arr, fn(el)->
               el[:field] == fieldname
             end)
 
             field[:type]
           else
-            fieldname = if fieldname == :id do
-              :_id
-            else
-              fieldname
-            end
-
-            unquote(module).__schema__(:type, fieldname)
+            __MODULE__.__schema__(:type, fieldname)
           end
 
           fieldname = if fieldname == :id do
